@@ -42,7 +42,7 @@ void* ccalloc(size_t num, size_t size)
     return mmalloc(num * size);
 }
 
-void* rrealloc(void* ptr, size_t size) /* Copy old data */
+void* rrealloc(void* ptr, size_t size)
 {
     if(size == 0)
         return NULL;
@@ -59,6 +59,7 @@ void* rrealloc(void* ptr, size_t size) /* Copy old data */
     if(!new_ptr)
         return NULL;
 
+    /* Copy old data */
     memcpy(new_ptr, ptr, size);
     return new_ptr;
 }
@@ -83,7 +84,7 @@ struct block_meta* find_free_block(struct block_meta** last_block, size_t size)
     /* Find free block. It will return either NULL or a pointer */
     while(current_block && !(current_block->free && current_block->size >= size))
     {
-        *last_block    = current_block;
+        *last_block   = current_block;
         current_block = current_block->next;
     }
 
