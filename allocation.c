@@ -34,6 +34,35 @@ void* mmalloc(size_t size)
     return (new_block + 1);
 }
 
+void* ccalloc(size_t num, size_t size)
+{
+    if(num == 0 || size == 0)
+        return NULL;
+
+    return mmalloc(num * size);
+}
+
+void* rrealloc(void* ptr, size_t size) /* Copy old data */
+{
+    if(size == 0)
+        return NULL;
+    else if(!ptr)
+        return mmalloc(size);
+
+    struct block_meta* ptrs_block = get_block_meta(ptr);
+
+    /* Do we have enough space? */
+    if(ptrs_block->size >= size)
+        return ptr;
+
+    void* new_ptr = mmalloc(size);
+    if(!new_ptr)
+        return NULL;
+
+    memcpy(new_ptr, ptr, size);
+    return new_ptr;
+}
+
 void ffree(void* ptr)
 {
     if(!ptr)
