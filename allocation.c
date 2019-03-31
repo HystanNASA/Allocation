@@ -1,37 +1,147 @@
 #include "allocation.h"
 
-void* global_base = NULL;
+struct block_meta* global_base = NULL;
+short first_allocation = 0;
 
-void* mmalloc(size_t size)
+struct block_meta* find_free_block(size_t size)
 {
-    struct block_meta* new_block;
+    if(!global_base)
+        return NULL;
 
+    struct block_meta* current_block = global_base;
+
+    /* Looking for free block */
+    while(current_block->next && !(current_block->free && current_block->size >= size)) current_block = current_block->next;
+
+    current_block->free = 0;
+
+    return current_block;
+}
+
+struct block_meta* request_spcae(size_t size)
+{
     if(size == 0)
         return NULL;
 
-    if(!global_base) /* Haven't allocated anything */
+    struct block_meta* current_block = global_base;
+    struct block_meta* new_block = NULL;
+
+    if(!global_base)
     {
-        new_block = global_base = request_space(NULL, size);
-        if(!global_base)
-            return NULL;
+        new_block       = sbrk(SIZE_OF_BLOCK_META + size);
+        new_block->size = size;
+        new_block->next = NULL;
+        new_block->prev = NULL;
+        new_block->free = 0;
+
+        return new_block;
     }
-    else /* Try to find a free block, or allocate a new one */
+
+    /* Looking for the last block */
+    while(current_block->next) current_block = current_block->next;
+
+    /* Is the last block free? */
+    if(current_block->free)
     {
-        new_block = find_free_block(global_base, size);
-        
+        /* Does it match the requested size? */
+        if(current_block->size >= size)
+        {
+            current_block->free = 0;
+            return current_block;
+        }
+        else
+        {
+            /* Expand the size */
+            sbrk(size - current_block->size);
+            
+            current_block->size = size;
+            current_block->free = 0;
+
+            return current_block;
+        }
+    }
+    else
+    {
+        new_block           = sbrk(SIZE_OF_BLOCK_META + size);
+        new_block->size     = size;
+        new_block->next     = NULL;
+        new_block->prev     = current_block;
+        new_block->free     = 0;
+
+        current_block->next = new_block;
+
+        return new_block;
+    }
+}
+
+void merge()
+{
+    if(!global_base)
+        return;
+
+    struct block_meta* current_block = global_base;
+    struct block_meta* last_block = NULL;
+
+    while(current_block->next)
+    {
+        // TODO
+        last_block = current_block;
+        current_block = current_block->next;
+    }
+}
+
+void* get_block_meta(void* ptr)
+{
+    return (ptr - SIZE_OF_BLOCK_META);
+}
+
+void cleanup()
+{
+    if(global_base)
+        brk(global_base);
+
+    global_base = NULL;
+}
+
+void* mmalloc(size_t size)
+{
+    if(size == 0)
+        return NULL;
+
+    if(!first_allocation)
+    {
+        first_allocation = 1;
+        /* cleanup() will be called at normal process termination */
+        atexit(cleanup);
+    }
+
+    struct block_meta* new_block;
+
+    /* Do we have blocks? */
+    if(!global_base)
+    {
+        new_block = global_base = request_spcae(size);
         if(!new_block)
         {
-            new_block = request_space(global_base, size);
-                if(!new_block)
-                    return NULL;
-            new_block->size = size;
-            new_block->next = NULL;
-            new_block->free = 0;
+            global_base = NULL;
+            return NULL;
+        }
+    }
+    else
+    {
+        new_block = find_free_block(size);
+
+        /* Did we find a free block? */
+        if(!new_block)
+        {
+            /* Allocating a new one */
+            new_block = request_spcae(size);
+            if(!new_block)
+                return NULL;
         }
     }
 
-    /* Return the region after block_meta */
-    return (new_block + 1);
+    return (new_block + SIZE_OF_BLOCK_META);
 }
 
 void* ccalloc(size_t num, size_t size)
@@ -44,24 +154,17 @@ void* ccalloc(size_t num, size_t size)
 
 void* rrealloc(void* ptr, size_t size)
 {
-    if(size == 0)
+    if(!ptr || size == 0)
         return NULL;
-    else if(!ptr)
-        return mmalloc(size);
-
+        
     struct block_meta* ptrs_block = get_block_meta(ptr);
 
-    /* Do we have enough space? */
     if(ptrs_block->size >= size)
         return ptr;
 
-    void* new_ptr = mmalloc(size);
-    if(!new_ptr)
-        return NULL;
+    ptrs_block->free = 1;
 
-    /* Copy old data */
-    memcpy(new_ptr, ptr, size);
-    return new_ptr;
+    return mmalloc(size);
 }
 
 void ffree(void* ptr)
@@ -70,45 +173,6 @@ void ffree(void* ptr)
         return;
 
     struct block_meta* ptrs_block = get_block_meta(ptr);
-    
-    if(ptrs_block->free == 0)
-        return;
-    else
-        ptrs_block->free = 0;
-}
 
-struct block_meta* find_free_block(struct block_meta** last_block, size_t size)
-{
-    struct block_meta* current_block = global_base;
-
-    /* Find free block. It will return either NULL or a pointer */
-    while(current_block && !(current_block->free && current_block->size >= size))
-    {
-        *last_block   = current_block;
-        current_block = current_block->next;
-    }
-
-    return current_block;
-}
-
-struct block_meta* request_space(struct block_meta* last_block, size_t size)
-{
-    struct block_meta*  new_block   = sbrk(0);
-    void*               request     = sbrk(size + SIZE_OF_BLOCK_META);
-
-    if( ((void*)new_block != request) || (request == (void*)-1) )
-        return NULL;
-
-    if(last_block)
-        last_block->next = new_block;
-
-    new_block->size = size;
-    new_block->next = NULL;
-    new_block->free = 0;
-    return new_block;
-}
-
-struct block_meta* get_block_meta(void* ptr)
-{
-    return (struct block_meta*)ptr - 1;
+    ptrs_block->free = 1;
 }
