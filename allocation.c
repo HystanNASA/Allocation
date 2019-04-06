@@ -3,8 +3,30 @@
 struct block_meta* global_base = NULL;
 short first_allocation = 0;
 
+void print_state()
+{
+    struct block_meta* current_block = global_base;
+
+    while(current_block)
+    {
+        printf("block\n");
+
+        if(current_block->next)
+            current_block = current_block->next;
+        else
+            break;
+    }
+}
+
 struct block_meta* find_free_block(size_t size)
 {
+#if __x86_64__ || __ppc64__
+    #define macro_int int64_t
+#else
+    #define macro_int int32_t
+#endif
+
+
     if(!global_base)
         return NULL;
 
@@ -13,8 +35,36 @@ struct block_meta* find_free_block(size_t size)
     /* Looking for free block */
     while(current_block->next && !(current_block->free && current_block->size >= size)) current_block = current_block->next;
 
+    /* NOTE: Used for testing */
+    assert(current_block);
+
+    /* Try to split the block */
+    /* Do we have enough space after splitting the block? If so, is it divided by 2? */
+    if( ( (macro_int)current_block->size - (macro_int)size - (macro_int)SIZE_OF_BLOCK_META > 1 )
+            && ( ( (macro_int)current_block->size - (macro_int)size - (macro_int)SIZE_OF_BLOCK_META) % 2) == 0 )
+    {
+        struct block_meta* new_block = current_block->size + SIZE_OF_BLOCK_META;
+
+        new_block->size     = size;
+        new_block->next     = current_block->next;
+        new_block->prev     = current_block;
+        new_block->free     = 1;
+
+        current_block->size = current_block->size - size - SIZE_OF_BLOCK_META;
+        current_block->next = new_block;
+
+        // NOTE: segfault because of new_block locating
+        //memset(new_block + SIZE_OF_BLOCK_META, 0, new_block->size);
+
+        printf("splitting\n");
+    }
+
     current_block->free = 0;
 
+    //memset(current_block + SIZE_OF_BLOCK_META, 0, current_block->size);
+
+#undef macro_int
+    
     return current_block;
 }
 
@@ -69,7 +119,7 @@ struct block_meta* request_spcae(size_t size)
         new_block->free     = 0;
 
         current_block->next = new_block;
-
+        
         return new_block;
     }
 }
@@ -82,11 +132,30 @@ void merge()
     struct block_meta* current_block = global_base;
     struct block_meta* last_block = NULL;
 
+    if(!current_block->next)
+        printf("We don't have more that one block\n");
+    else
+        printf("We have more that one block\n");
+
     while(current_block->next)
     {
-        // TODO
-        last_block = current_block;
-        current_block = current_block->next;
+        if(current_block->free && last_block && last_block->free)
+        {
+            last_block->size += current_block->size + SIZE_OF_BLOCK_META;
+            last_block->next = current_block->next;
+
+            memset(last_block + SIZE_OF_BLOCK_META, 0, last_block->size);
+            
+            if(last_block->next)
+                current_block = last_block->next;
+            else
+                return;
+        }
+        else
+        {
+            last_block = current_block;
+            current_block = current_block->next;
+        }
     }
 }
 
@@ -175,4 +244,7 @@ void ffree(void* ptr)
     struct block_meta* ptrs_block = get_block_meta(ptr);
 
     ptrs_block->free = 1;
+
+    merge();
+    print_state();
 }

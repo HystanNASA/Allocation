@@ -6,16 +6,9 @@
 
 int main(int argc, char const *argv[])
 {    
-    int* a = (int*)mmalloc(sizeof(int));
-    int* b = (int*)mmalloc(sizeof(int) * 2);
-
-    if(!a)
-    {
-        printf("Doesn't work\n");
-        return 1;
-    }
-
+    int* a = (int*)mmalloc(sizeof(int)* 511);
     ffree(a);
+    int* b = (int*)mmalloc(sizeof(int) * 2);
     ffree(b);
 
     return 0;
