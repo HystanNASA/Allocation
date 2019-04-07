@@ -1,5 +1,7 @@
 #include "allocation.h"
 
+#define GET_BLOCK_META(ptr) (ptr - SIZE_OF_BLOCK_META)
+
 struct block_meta* global_base = NULL;
 short first_allocation = 0;
 
@@ -10,7 +12,7 @@ void print_state()
     printf("<heap>\n");
     for(int i = 0; current_block; i++)
     {
-        printf("%d. block\n", i);
+        printf("%d. block free %d\n", i, current_block->free);
 
         if(current_block->next)
             current_block = current_block->next;
@@ -61,6 +63,9 @@ struct block_meta* find_free_block(size_t size)
     /* NOTE: Used for testing */
     assert(current_block);
 
+    if(current_block->free == 0)
+        return NULL;
+
     /* Try to split the block */
     split_large_block(current_block, size);
     
@@ -81,7 +86,11 @@ struct block_meta* request_spcae(size_t size)
 
     if(!global_base)
     {
-        new_block       = sbrk(SIZE_OF_BLOCK_META + size);
+        new_block = sbrk(SIZE_OF_BLOCK_META + size);
+
+        /*NOTE: Used for testing*/
+        assert(new_block != (void*)-1);
+
         new_block->size = size;
         new_block->next = NULL;
         new_block->prev = NULL;
@@ -116,6 +125,10 @@ struct block_meta* request_spcae(size_t size)
     else
     {
         new_block           = sbrk(SIZE_OF_BLOCK_META + size);
+
+        /*NOTE: Used for testing*/
+        assert(new_block != (void*)-1);
+
         new_block->size     = size;
         new_block->next     = NULL;
         new_block->prev     = current_block;
@@ -148,7 +161,6 @@ void merge()
                 current_block = last_block->next;
             else
                 return;
-            printf("Do merge...\n");
         }
         else
         {
@@ -156,11 +168,6 @@ void merge()
             current_block = current_block->next;
         }
     }
-}
-
-void* get_block_meta(void* ptr)
-{
-    return (ptr - SIZE_OF_BLOCK_META);
 }
 
 void cleanup()
@@ -176,7 +183,7 @@ void* mmalloc(size_t size)
     if(size == 0)
         return NULL;
 
-    if(!first_allocation)
+    if(first_allocation == 0)
     {
         first_allocation = 1;
         /* cleanup() will be called at normal process termination */
@@ -188,7 +195,7 @@ void* mmalloc(size_t size)
     /* Do we have blocks? */
     if(!global_base)
     {
-        new_block = global_base = request_spcae(size);
+        global_base = new_block = request_spcae(size);
         if(!new_block)
         {
             global_base = NULL;
@@ -225,7 +232,7 @@ void* rrealloc(void* ptr, size_t size)
     if(!ptr || size == 0)
         return NULL;
         
-    struct block_meta* ptrs_block = get_block_meta(ptr);
+    struct block_meta* ptrs_block = GET_BLOCK_META(ptr);
 
     if(ptrs_block->size >= size)
         return ptr;
@@ -240,11 +247,17 @@ void ffree(void* ptr)
     if(!ptr)
         return;
 
-    struct block_meta* ptrs_block = get_block_meta(ptr);
+    struct block_meta* ptrs_block = GET_BLOCK_META(ptr);
+
+    /*
+    if(ptrs_block == global_base)
+        printf("This block is global_base\n");
+    else
+        printf("global_base: %p\nmeanwhile the block: %p\n", global_base, ptrs_block);
+    */
 
     ptrs_block->free = 1;
 
-    //printf("ok>\n");
-    //merge();
-    print_state();
+    merge();
+    // print_state();
 }
