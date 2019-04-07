@@ -1,6 +1,6 @@
 #include "allocation.h"
 
-#define GET_BLOCK_META(ptr) (ptr - SIZE_OF_BLOCK_META)
+#define GET_BLOCK_META(ptr) (struct block_meta*)((struct block_meta*)ptr - SIZE_OF_BLOCK_META)
 
 struct block_meta* global_base = NULL;
 short first_allocation = 0;
@@ -148,7 +148,7 @@ void merge()
     struct block_meta* current_block = global_base;
     struct block_meta* last_block = NULL;
 
-    while(current_block->next)
+    while(current_block)
     {
         if(current_block->free && last_block && last_block->free)
         {
@@ -166,10 +166,11 @@ void merge()
         {
             last_block = current_block;
             current_block = current_block->next;
-        }
+		}
     }
 }
 
+/* This function sets brk() to the first position, i.e., cleaning memory up. */
 void cleanup()
 {
     if(global_base)
@@ -247,17 +248,9 @@ void ffree(void* ptr)
     if(!ptr)
         return;
 
-    struct block_meta* ptrs_block = GET_BLOCK_META(ptr);
-
-    /*
-    if(ptrs_block == global_base)
-        printf("This block is global_base\n");
-    else
-        printf("global_base: %p\nmeanwhile the block: %p\n", global_base, ptrs_block);
-    */
+	struct block_meta* ptrs_block = GET_BLOCK_META(ptr);
 
     ptrs_block->free = 1;
 
     merge();
-    // print_state();
 }
