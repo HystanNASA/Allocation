@@ -20,6 +20,34 @@ void print_state()
     printf("</heap>\n");
 }
 
+/* 
+This function splits a large block.
+If the block is splitable, the block variable has the requested size.
+It doesn't reutrn anything because that info is useless.
+*/
+void split_large_block(struct block_meta *const block, const size_t size)
+{
+    if(!block)
+        return;
+
+    /* Will we have enough space after splitting the block? If so, is it divided by 2? */
+    if( ( block->size - size - SIZE_OF_BLOCK_META > 1 )
+            && ( ( block->size - size - SIZE_OF_BLOCK_META) % 2) == 0 )
+    {
+        struct block_meta* new_block = block + size + SIZE_OF_BLOCK_META;
+
+        new_block->size = block->size - size - SIZE_OF_BLOCK_META;
+        new_block->next = block->next;
+        new_block->prev = block;
+        new_block->free = 1;
+
+        block->size = size;
+        block->next = new_block;
+
+        memset(new_block + SIZE_OF_BLOCK_META, 0, new_block->size);
+    }
+}
+
 struct block_meta* find_free_block(size_t size)
 {
     if(!global_base)
@@ -27,31 +55,15 @@ struct block_meta* find_free_block(size_t size)
 
     struct block_meta* current_block = global_base;
 
-    /* Looking for free block */
+    /* Looking for a free block */
     while(current_block->next && !(current_block->free && current_block->size >= size)) current_block = current_block->next;
 
     /* NOTE: Used for testing */
     assert(current_block);
 
     /* Try to split the block */
-    /* Do we have enough space after splitting the block? If so, is it divided by 2? */
-    if( ( current_block->size - size - SIZE_OF_BLOCK_META > 1 )
-            && ( ( current_block->size - size - SIZE_OF_BLOCK_META) % 2) == 0 )
-    {
-        struct block_meta* new_block = current_block + current_block->size + SIZE_OF_BLOCK_META;
-
-        new_block->size     = size;
-        new_block->next     = current_block->next;
-        new_block->prev     = current_block;
-        new_block->free     = 1;
-
-        current_block->size = current_block->size - size - SIZE_OF_BLOCK_META;
-        current_block->next = new_block;
-
-        //printf("printf\n");
-        memset(new_block + SIZE_OF_BLOCK_META, 0, new_block->size);
-    }
-
+    split_large_block(current_block, size);
+    
     current_block->free = 0;
 
     memset(current_block + SIZE_OF_BLOCK_META, 0, current_block->size);
@@ -234,5 +246,5 @@ void ffree(void* ptr)
 
     //printf("ok>\n");
     //merge();
-    //print_state();
+    print_state();
 }
