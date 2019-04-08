@@ -1,6 +1,7 @@
 #include "allocation.h"
 
 #define GET_BLOCK_META(ptr) (struct block_meta*)((struct block_meta*)ptr - SIZE_OF_BLOCK_META)
+#define MAX_TOTAL_SIZE 512 /* If the total size of blocks more than this, they are deleted */
 
 struct block_meta* global_base = NULL;
 short first_allocation = 0;
@@ -170,6 +171,28 @@ void merge()
     }
 }
 
+void check_and_delete_blocks()
+{
+	if (!global_base || global_base->next == NULL)
+		return;
+
+	struct block_meta* last_block = NULL;
+	size_t total_size = 0;
+
+	for (last_block = global_base; last_block->next; last_block = last_block->next);
+	total_size = last_block - global_base;
+	//printf("Block %p\n", last_block);
+	while ( (total_size >= MAX_TOTAL_SIZE) && (last_block) && (last_block->free) )
+	{
+		struct block_meta* prev_block = last_block->prev;
+
+		total_size -= last_block->size + SIZE_OF_BLOCK_META;
+		brk(last_block);
+
+		last_block = prev_block;
+	}
+}
+
 /* This function sets brk() to the first position, i.e., cleaning memory up. */
 void cleanup()
 {
@@ -252,5 +275,6 @@ void ffree(void* ptr)
 
     ptrs_block->free = 1;
 
+	check_and_delete_blocks();
     merge();
 }

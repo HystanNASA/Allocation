@@ -6,7 +6,7 @@
 
 int main(int argc, char const *argv[])
 {    
-    int* a = (int*)mmalloc(sizeof(int) * 2);
+    int* a = (int*)mmalloc(sizeof(int) * 512);
 	int* b = (int*)mmalloc(sizeof(int) * 2);
     ffree(a);
 	ffree(b);
