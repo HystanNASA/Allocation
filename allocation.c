@@ -179,15 +179,16 @@ void check_and_delete_blocks()
 	struct block_meta* last_block = NULL;
 	size_t total_size = 0;
 
-	for (last_block = global_base; last_block->next; last_block = last_block->next);
-	total_size = last_block - global_base;
-	//printf("Block %p\n", last_block);
+	for (last_block = global_base->next; last_block->next; last_block = last_block->next);
+		total_size += (size_t)last_block - (size_t)global_base;
+
+	struct block_meta* prev_block = last_block->prev;
+	
 	while ( (total_size >= MAX_TOTAL_SIZE) && (last_block) && (last_block->free) )
 	{
-		struct block_meta* prev_block = last_block->prev;
-
+		printf("deleting\n");
 		total_size -= last_block->size + SIZE_OF_BLOCK_META;
-		brk(last_block);
+		sbrk( -(intptr_t)( last_block->size + SIZE_OF_BLOCK_META) );
 
 		last_block = prev_block;
 	}
@@ -237,7 +238,7 @@ void* mmalloc(size_t size)
             new_block = request_spcae(size);
             if(!new_block)
                 return NULL;
-        }
+		}
     }
 
     return (new_block + SIZE_OF_BLOCK_META);
@@ -272,7 +273,6 @@ void ffree(void* ptr)
         return;
 
 	struct block_meta* ptrs_block = GET_BLOCK_META(ptr);
-
     ptrs_block->free = 1;
 
 	check_and_delete_blocks();
