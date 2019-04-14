@@ -141,6 +141,7 @@ struct block_meta* request_spcae(size_t size)
     }
 }
 
+/* This function merges blocks */
 void merge()
 {
     if(!global_base)
@@ -171,6 +172,7 @@ void merge()
     }
 }
 
+/* This function deletes blocks if they take a lot of space. */
 void check_and_delete_blocks()
 {
 	if (!global_base || global_base->next == NULL)
@@ -179,14 +181,15 @@ void check_and_delete_blocks()
 	struct block_meta* last_block = NULL;
 	size_t total_size = 0;
 
+	/* Looking for the last block */
 	for (last_block = global_base->next; last_block->next; last_block = last_block->next);
 		total_size += (size_t)last_block - (size_t)global_base;
 
 	struct block_meta* prev_block = last_block->prev;
 	
+	/* Delete blocks if their size more than MAX_TOTAL_SIZE */
 	while ( (total_size >= MAX_TOTAL_SIZE) && (last_block) && (last_block->free) )
 	{
-		printf("deleting\n");
 		total_size -= last_block->size + SIZE_OF_BLOCK_META;
 		sbrk( -(intptr_t)( last_block->size + SIZE_OF_BLOCK_META) );
 
